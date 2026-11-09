@@ -1,0 +1,14 @@
+secrets/*.txt
+secrets/*_password.txt
+secrets/credentials.txt
+
+!secrets/.gitkeep
+
+srcs/.env
+.env
+
+*.swp
+*.swo
+*~
+.DS_Store
+*.log
