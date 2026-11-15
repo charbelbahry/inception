@@ -20,7 +20,7 @@ RUN apk update && \
         curl \
         bash
 
-RUN echo "memory_limit = 512M" >> /etc/php83.ini
+RUN echo "memory_limit = 512M" >> /etc/php83/php.ini
 
 RUN ln -sf /usr/bin/php83 /usr/bin/php && \
 ln -sf /usr/bin/php-fpm83 /usr/bin/php-fpm

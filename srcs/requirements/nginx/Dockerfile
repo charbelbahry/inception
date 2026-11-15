@@ -6,7 +6,9 @@ RUN apk update && \
 	openssl \
 	bash
 
-COPY conf/nginx.conf /etx/nginx/nginx.conf
+RUN rm -rf /etc/nginx/http.d/default.conf
+
+COPY conf/nginx.conf /etc/nginx/nginx.conf
 
 COPY tools/nginx_init.sh /usr/local/bin/nginx_init.sh
 RUN chmod +x /usr/local/bin/nginx_init.sh
