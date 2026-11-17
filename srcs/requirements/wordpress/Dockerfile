@@ -1,39 +1,25 @@
 FROM alpine:3.23
 
 RUN apk update && \
-	apk add --no-cache \
-	php83 \
-	php83-fpm \
-	php83-mysqli \
-        php83-json \
-        php83-curl \
-        php83-dom \
-        php83-exif \
-        php83-fileinfo \
-        php83-mbstring \
-        php83-openssl \
-        php83-xml \
-        php83-zip \
-        php83-phar \
-        php83-iconv \
-        mariadb-client \
-        curl \
-        bash
+	apk add \
+        php84 php84-fpm php84-phar php84-mysqli php84-mbstring \
+        php84-curl php84-openssl php84-iconv php84-tokenizer php84-ctype \
+        php84-xml php84-dom php84-simplexml php84-xmlreader php84-gd \
+        php84-zip php84-exif php84-fileinfo php84-intl php84-session \
+        curl bash
 
-RUN echo "memory_limit = 512M" >> /etc/php83/php.ini
 
-RUN ln -sf /usr/bin/php83 /usr/bin/php && \
-ln -sf /usr/bin/php-fpm83 /usr/bin/php-fpm
+RUN curl -o /usr/local/bin/wp \
+	 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
+	chmod +x /usr/local/bin/wp
 
-RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
-	chmod +x wp-cli.phar && \
-	mv wp-cli.phar /usr/local/bin/wp
+RUN sed -i 's/^memory_limit = .*/memory_limit = 512M/' /etc/php84/php.ini
 
-COPY conf/www.conf /etc/php83/php-fpm.d/www.conf
-
+COPY conf/www.conf /etc/php84/php-fpm.d/www.conf
 COPY tools/wp_init.sh /usr/local/bin/wp_init.sh
 RUN chmod +x /usr/local/bin/wp_init.sh
 
+WORKDIR /var/www/html
 EXPOSE 9000
 
 ENTRYPOINT ["/usr/local/bin/wp_init.sh"]

@@ -1,18 +1,22 @@
 FROM alpine:3.23
 
+ARG DOMAIN_NAME 
+
 RUN apk update && \
-	apk add --no-cache \
+	apk add \
 	nginx \
 	openssl \
 	bash
 
-RUN rm -rf /etc/nginx/http.d/default.conf
+RUN mkdir -p /etc/nginx/ssl \
+	&& openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+	-keyout /etc/nginx/ssl/inception.key \
+	-out /etc/nginx/ssl/inception.crt \
+	-subj "/C=FR/L=Paris/O=42/CN=${DOMAIN_NAME}"
 
-COPY conf/nginx.conf /etc/nginx/nginx.conf
-
-COPY tools/nginx_init.sh /usr/local/bin/nginx_init.sh
-RUN chmod +x /usr/local/bin/nginx_init.sh
+COPY conf/default.conf /etc/nginx/http.d/default.conf
+RUN sed -i "s/DOMAIN_NAME/${DOMAIN_NAME}/" /etc/nginx/http.d/default.conf
 
 EXPOSE 443
 
-ENTRYPOINT ["/usr/local/bin/nginx_init.sh"]
+ENTRYPOINT ["nginx", "-g", "daemon off;"]

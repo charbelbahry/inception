@@ -3,7 +3,7 @@ name: inception
 services:
   mariadb:
     container_name: mariadb
-    image: mariadb
+    image: mariadb:inception
     build:
       context: requirements/mariadb
       dockerfile: Dockerfile
@@ -21,7 +21,7 @@ services:
 
   wordpress:
     container_name: wordpress
-    image: wordpress
+    image: wordpress:inception
     build:
       context: requirements/wordpress
       dockerfile: Dockerfile
@@ -32,28 +32,29 @@ services:
       - .env
     secrets:
       - db_password
-      - wp_admin_password
-      - wp_user_password
+      - credentials
     volumes:
-      - wordpress_data:/var/www/wordpress
+      - wordpress_data:/var/www/html
     networks:
       - inception
 
   nginx:
     container_name: nginx
-    image: nginx
+    image: nginx:inception
     build:
       context: requirements/nginx
       dockerfile: Dockerfile
+      args:
+        DOMAIN_NAME: ${DOMAIN_NAME}
     restart: always
     depends_on:
       - wordpress
     env_file:
       - .env
     ports:
-      - "443:443"
+      - "8443:443"
     volumes:
-      - wordpress_data:/var/www/wordpress:ro
+      - wordpress_data:/var/www/html
     networks:
       - inception
 
@@ -65,7 +66,6 @@ networks:
 
 volumes:
   mariadb_data:
-    name: mariadb_data
     driver: local
     driver_opts:
       type: none
@@ -86,7 +86,5 @@ secrets:
     file: ../secrets/db_password.txt
   db_root_password:
     file: ../secrets/db_root_password.txt
-  wp_admin_password:
-    file: ../secrets/wp_admin_password.txt
-  wp_user_password:
-    file: ../secrets/wp_user_password.txt
+  credentials:
+    file: ../secrets/credentials.txt
