@@ -1,166 +1,147 @@
-# Inception - Developer & System Administration Documentation
+# Inception - Developer Documentation
 
-This document provides developer-oriented instructions for configuring, developing, debugging, and administering the Inception container stack from scratch.
+This document describes how a developer can set up, build, manage, and understand the persistence of the Inception infrastructure, adhering strictly to Chapter VII of the subject.
 
 ---
 
-## 1. Environment Setup from Scratch
+## 1. Setting Up the Environment from Scratch
 
-### System Prerequisites
-To run and develop this project, the host environment (Virtual Machine) requires:
-- **Operating System:** Linux (Arch Linux, Debian 11/12, or Ubuntu 22.04+)
-- **Container Engine:** Docker Engine v24.0+ and Docker Compose v2.0+
-- **Toolchain:** GNU Make, OpenSSL, `curl`, `net-tools` (or `iproute2`), `git`
+### Prerequisites
+- **Operating System:** Linux Virtual Machine (Arch Linux, Debian, or Ubuntu)
+- **Engine & Tools:** Docker Engine (v24+), Docker Compose (v2+), GNU Make, OpenSSL, `curl`
 
-### Initial System Configuration
-1. **Map the Local Domain:**
-   Ensure `cbahry.42.fr` maps to the loopback interface inside `/etc/hosts`:
+### Configuration Files & Domain
+1. Map the domain name in `/etc/hosts`:
    ```bash
    echo "127.0.0.1 cbahry.42.fr" | sudo tee -a /etc/hosts
    ```
-
-2. **Grant Non-Root Docker Access:**
-   Add your development user to the `docker` group to avoid typing `sudo` for container commands:
-   ```bash
-   sudo usermod -aG docker $USER
-   newgrp docker
-   ```
-
-3. **Initialize the Secrets Files:**
-   Docker Compose expects secrets to be stored in `secrets/*.txt` (ignored by Git):
-   ```bash
-   mkdir -p secrets
-   echo "mariadb_user_pass_42!" > secrets/db_password.txt
-   echo "mariadb_root_pass_42!" > secrets/db_root_password.txt
-   echo "wp_admin_secure_pass_42!" > secrets/wp_admin_password.txt
-   echo "wp_user_regular_pass_42!" > secrets/wp_user_password.txt
-   chmod 600 secrets/*.txt
-   ```
-
-4. **Initialize Environment Variables:**
-   Create your local active `.env` file from the repository template:
+2. Create `srcs/.env` from template:
    ```bash
    cp srcs/.env.example srcs/.env
    ```
+   Set configuration values:
+   ```ini
+   DOMAIN_NAME=cbahry.42.fr
+   MYSQL_DATABASE=inception_db
+   MYSQL_USER=inception_user
+   WP_TITLE="Inception cbahry"
+   WP_ADMIN_USER=cbahry_boss
+   WP_ADMIN_EMAIL=cbahry_boss@student.42.fr
+   WP_USER=reviewer
+   WP_USER_EMAIL=reviewer@student.42.fr
+   ```
 
----
-
-## 2. Building and Launching with Makefile & Compose
-
-The project lifecycle is fully orchestrated through the root `Makefile`:
-
-```
-make / make up       ──> Prepares data dirs + builds images + starts stack in background
-make build           ──> Builds Docker images via compose without starting containers
-make down            ──> Stops and removes containers and internal networks (data preserved)
-make status          ──> Displays operational status of all services (docker compose ps)
-make logs            ──> Streams real-time aggregated logs from all services
-make clean           ──> Stops containers and prunes dangling Docker cache
-make fclean          ──> Complete teardown: deletes containers, images, volumes, and host data
-make re              ──> Runs fclean followed by make all (clean rebuild from zero)
-```
-
-### Direct Docker Compose Commands
-If direct compose invocation is required during development:
+### Secrets Configuration
+Create the `secrets/` directory and required secret files (ignored by Git):
 ```bash
-# Build images explicitly without cache:
-docker compose -f srcs/docker-compose.yml build --no-cache
+mkdir -p secrets
 
-# Start a specific service (e.g. MariaDB):
-docker compose -f srcs/docker-compose.yml up -d mariadb
+echo "mariadb_user_pass_42!" > secrets/db_password.txt
+echo "mariadb_root_pass_42!" > secrets/db_root_password.txt
 
-# Restart a single service:
-docker compose -f srcs/docker-compose.yml restart nginx
+cat << 'EOF' > secrets/credentials.txt
+WP_ADMIN_PASSWORD="wp_admin_secure_pass_42!"
+WP_USER_PASSWORD="wp_user_regular_pass_42!"
+EOF
+
+chmod 600 secrets/*.txt
 ```
 
 ---
 
-## 3. Container & Volume Management Commands
+## 2. Building and Launching the Project
 
-### Interactive Shell Access
+The build and runtime lifecycle is orchestrated via the root `Makefile` and `docker compose`:
+
 ```bash
-# Enter the NGINX gateway container:
+# Build images and start all containers in detached mode:
+make
+# or
+make up
+
+# Stop and remove containers and network (preserving data):
+make down
+
+# Pause running containers:
+make stop
+
+# Resume stopped containers:
+make start
+
+# View container operational status:
+make ps
+
+# Inspect live aggregated logs:
+make logs
+
+# Full reset (removes containers, images, volumes, and host data):
+make fclean
+
+# Clean rebuild from zero:
+make re
+```
+
+---
+
+## 3. Managing Containers and Volumes
+
+### Interactive Container Access
+```bash
+# Access NGINX container shell:
 docker exec -it nginx sh
 
-# Enter the WordPress PHP-FPM container:
+# Access WordPress container shell:
 docker exec -it wordpress sh
 
-# Enter the MariaDB database container:
+# Access MariaDB container shell:
 docker exec -it mariadb sh
 ```
 
-### Database Management via CLI
+### Database Management Commands
 ```bash
-# Test MariaDB local connection and inspect tables:
-docker exec -it mariadb mariadb -u inception_user -p'mariadb_user_pass_42!' -e "USE inception_db; SHOW TABLES;"
+# Connect to MariaDB as application user:
+docker exec -it mariadb mariadb -u inception_user -p"$(cat secrets/db_password.txt)" inception_db -e "SHOW TABLES;"
 
-# Log in as root to run administrative queries:
-docker exec -it mariadb mariadb -u root -p'mariadb_root_pass_42!' -e "SHOW DATABASES;"
+# Connect to MariaDB as root superuser:
+docker exec -it mariadb mariadb -u root -p"$(cat secrets/db_root_password.txt)" -e "SHOW DATABASES;"
 ```
 
-### WordPress Administration via WP-CLI
+### WordPress Management Commands (WP-CLI)
 ```bash
-# List all registered WordPress accounts:
-docker exec -it wordpress wp user list --allow-root --path=/var/www/wordpress
+# List users:
+docker exec -it wordpress wp user list --allow-root --path=/var/www/html
 
-# Create a test post programmatically:
-docker exec -it wordpress wp post create \
-    --post_title="Developer Test Post" \
-    --post_content="Testing database persistence" \
-    --post_status=publish \
-    --allow-root --path=/var/www/wordpress
+# Verify core version and status:
+docker exec -it wordpress wp core version --allow-root --path=/var/www/html
 
-# Check WordPress core version and status:
-docker exec -it wordpress wp core version --allow-root --path=/var/www/wordpress
+# Check configured database options:
+docker exec -it wordpress wp option get siteurl --allow-root --path=/var/www/html
+docker exec -it wordpress wp option get home --allow-root --path=/var/www/html
 ```
 
-### Inspecting Internal Network Plumbing
+### Network & Volume Inspection
 ```bash
 # Inspect the isolated bridge network:
 docker network inspect inception
 
-# View virtual ethernet interfaces and container IP allocations:
-docker exec -it nginx ip addr
+# Inspect named volume metadata:
+docker volume inspect mariadb_data
+docker volume inspect wordpress_data
 ```
 
 ---
 
-## 4. Data Storage & Persistence Architecture
+## 4. Storage Locations and Data Persistence
 
-The subject strictly mandates:
-> *"You must use Docker named volumes for these two persistent storages. Bind mounts are not allowed for these volumes. Both named volumes must store their data inside /home/login/data on the host machine."*
+### Host Storage Locations
+Persistent data is stored on the host filesystem under `/home/cbahry/data`:
+- **Database Data:** `/home/cbahry/data/mariadb/` (mounted into MariaDB container at `/var/lib/mysql`).
+- **Website Files:** `/home/cbahry/data/wordpress/` (mounted into WordPress and NGINX containers at `/var/www/html`).
 
-### How Persistence is Engineered
-In `srcs/docker-compose.yml`, persistence is declared using **Docker Named Volumes backed by the `local` driver with `bind` options**:
-
-```yaml
-volumes:
-  mariadb_data:
-    name: mariadb_data
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /home/cbahry/data/mariadb
-
-  wordpress_data:
-    name: wordpress_data
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /home/cbahry/data/wordpress
-```
-
-### Physical Storage Paths on the Host
-Data persists permanently across container deletions in the following host directories:
-- **MariaDB Database Data:** `/home/cbahry/data/mariadb/` (stores InnoDB tablespaces, `.ibd` files, and `inception_db/` schema files).
-- **WordPress Site Files:** `/home/cbahry/data/wordpress/` (stores `wp-config.php`, core PHP scripts, themes, and uploaded media).
-
-### Persistence Lifecycle
-1. When `make down` is executed, the containers and virtual networks are deleted, but the contents of `/home/cbahry/data/` remain untouched.
-2. When `make up` is subsequently executed:
-   - `mariadb_init.sh` detects that `/var/lib/mysql/inception_db` already exists and skips re-initialization, preserving all tables.
-   - `wp_init.sh` detects that `wp-config.php` already exists and skips re-downloading or re-installing WordPress.
-3. Only `make fclean` will delete the volumes and purge the contents of `/home/cbahry/data/`.
-EOF
+### Persistence Mechanism
+- **Docker Named Volumes with Local Bind:**
+  In `srcs/docker-compose.yml`, volumes are defined using the `local` driver with `bind` options pointing to the host paths `/home/cbahry/data/mariadb` and `/home/cbahry/data/wordpress`.
+- **Lifecycle:**
+  - Running `make down` removes the container instances and networks, but leaves `/home/cbahry/data/` untouched.
+  - On subsequent `make up`, MariaDB detects the existing `/var/lib/mysql/inception_db` directory and skips initialization; WordPress detects `/var/www/html/wp-config.php` and skips re-installation, preserving all content and user state.
+  - Data is only purged when running `make fclean`, which explicitly removes host directories via `sudo rm -rf $(DATA_DIR)`.
